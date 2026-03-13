@@ -1,0 +1,177 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================
+
+model Usuario {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  nombre    String
+  apellido  String
+  rol       String     // ADMIN | TRANSPORTISTA | CLIENTE | ASEGURADORA
+  empresaId String?
+  empresa   Empresa?   @relation(fields: [empresaId], references: [id])
+  activo    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("usuarios")
+}
+
+model Empresa {
+  id        String     @id @default(cuid())
+  nombre    String
+  rut       String     @unique
+  tipo      String     // TRANSPORTISTA | CLIENTE | ASEGURADORA
+  direccion String?
+  telefono  String?
+  usuarios  Usuario[]
+  camiones  Camion[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("empresas")
+}
+
+// ============================================
+// FLOTA Y SENSORES
+// ============================================
+
+model Camion {
+  id          String       @id @default(cuid())
+  patente     String       @unique
+  marca       String?
+  modelo      String?
+  anio        Int?
+  empresaId   String
+  empresa     Empresa      @relation(fields: [empresaId], references: [id])
+  sensores    Sensor[]
+  transportes Transporte[]
+  activo      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("camiones")
+}
+
+model Sensor {
+  id               String    @id @default(cuid())
+  codigo           String    @unique
+  camionId         String
+  camion           Camion    @relation(fields: [camionId], references: [id])
+  tipo             String    // TEMPERATURA | HUMEDAD | GPS
+  fechaInstalacion DateTime  @default(now())
+  ultimaLectura    DateTime?
+  activo           Boolean   @default(true)
+  lecturas         Lectura[]
+  alertas          Alerta[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("sensores")
+}
+
+// ============================================
+// TRANSPORTES Y LECTURAS
+// ============================================
+
+model Transporte {
+  id             String        @id @default(cuid())
+  codigo         String        @unique
+  camionId       String
+  camion         Camion        @relation(fields: [camionId], references: [id])
+  origen         String
+  destino        String
+  fechaInicio    DateTime?
+  fechaFin       DateTime?
+  estado         String        // PROGRAMADO | EN_CURSO | COMPLETADO | CANCELADO | CON_INCIDENTE
+  temperaturaMin Float?
+  temperaturaMax Float?
+  humedadMin     Float?
+  humedadMax     Float?
+  descripcion    String?
+  clienteNombre  String?
+  clienteRut     String?
+  lecturas       Lectura[]
+  alertas        Alerta[]
+  certificados   Certificado[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("transportes")
+}
+
+model Lectura {
+  id           String     @id @default(cuid())
+  sensorId     String
+  sensor       Sensor     @relation(fields: [sensorId], references: [id])
+  transporteId String
+  transporte   Transporte @relation(fields: [transporteId], references: [id])
+  timestamp    DateTime   @default(now())
+  temperatura  Float?
+  humedad      Float?
+  latitud      Float?
+  longitud     Float?
+  sincronizado Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  @@index([sensorId, timestamp])
+  @@index([transporteId, timestamp])
+  @@map("lecturas")
+}
+
+// ============================================
+// ALERTAS
+// ============================================
+
+model Alerta {
+  id            String   @id @default(cuid())
+  sensorId      String
+  sensor        Sensor   @relation(fields: [sensorId], references: [id])
+  transporteId  String
+  transporte    Transporte @relation(fields: [transporteId], references: [id])
+  tipo          String   // TEMPERATURA_ALTA | TEMPERATURA_BAJA | HUMEDAD_ALTA | HUMEDAD_BAJA | SIN_CONEXION | BATERIA_BAJA
+  severidad     String   // BAJA | MEDIA | ALTA | CRITICA
+  mensaje       String
+  valor         Float?
+  umbral        Float?
+  timestamp     DateTime @default(now())
+  reconocida    Boolean  @default(false)
+  reconocidaPor String?
+  reconocidaEn  DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([transporteId, timestamp])
+  @@map("alertas")
+}
+
+// ============================================
+// CERTIFICADOS
+// ============================================
+
+model Certificado {
+  id            String     @id @default(cuid())
+  transporteId  String
+  transporte    Transporte @relation(fields: [transporteId], references: [id])
+  codigo        String     @unique
+  fechaEmision  DateTime   @default(now())
+  resultado     String     // APROBADO | RECHAZADO | CON_OBSERVACIONES
+  observaciones String?
+  txHash        String?
+  smartContract String?
+  verificado    Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+
+  @@map("certificados")
+}
